@@ -12,7 +12,7 @@ function setup() {
 function draw() {
   if (mouseIsPressed && mouseX > paletteWidth) {
     stroke(selectedColor);
-    strokeWeight(4);
+    strokeWeight(15);
     line(prevX, prevY, mouseX, mouseY);
   }
   prevX = mouseX;
