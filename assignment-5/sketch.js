@@ -37,5 +37,5 @@ function setup() {
 function draw() {
   background(220);
   text("Delay Time: " + delTime.value(), 60, 160);
-  text("Feedback: " + feedBack.value(), 60, 210)
+  text("Feedback: " + feedBack.value(), 60, 210);
 }
