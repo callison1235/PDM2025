@@ -1,3 +1,5 @@
+import * as Tone from "tone";
+
 let samples, button1, button2, button3, button4, delTime, feedBack
 
 let delay = new Tone.FeedbackDelay(0.5,0.5).toDestination()
