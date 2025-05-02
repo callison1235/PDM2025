@@ -1,15 +1,13 @@
 let port;
 let connectButton;
 let startButton;
-let x, y, sw;
+let xInput, swInput;
 
 let cup, ball;
-let ballSprites = [];
 let balls = [];
 let score = 0;
 let cupAnimate;
 let ballSpeed = 3;
-let currentSpeed = 3;
 let spawnRate = 20;
 let maxBalls = 10;
 
@@ -24,7 +22,7 @@ let gameOver = false;
 let winScore = 30;
 let gameStarted;
 
-let synth, kick, melodyPart, drumPart;
+let synth, kick, melodyPart, drumPart, noise, filter, lfo;
 let isPlaying = false;
 
 
@@ -55,14 +53,31 @@ function draw() {
   let str = port.readUntil('\n');
   if (str !== ""){
     const vals = str.split(',');
-    if (vals.length == 3){
-      x = Number(vals[0]);
-      y = Number(vals[1]);
-      sw = Number(vals[2]);
+    if (vals.length == 2){
+      xInput = Number(vals[0]);
+      swInput = Number(vals[1]);
 
-      console.log(x + "," + y +"," + sw);
+      console.log(xInput + "," + swInput);
     }
   }
+  cupAnimate.draw();
+  switch(xInput){
+    case xInput < 0:
+      cupAnimate.currentAnimation = "left";
+      break;
+    case xInput > 0:
+      cupAnimate.currentAnimation = "right";
+      break;
+    case xInput === 0:
+    default:
+      cupAnimate.currentAnimation = "neutral";
+      break;
+  }
+
+  for(i = 0; i < maxBalls; i++) {
+    balls[i] = new Ball(random(50,500), 15, ballSpeed, 1);
+  }
+
   if(gameStatus === 'S'){
     drawStartScreen();
   }
@@ -76,7 +91,7 @@ function connectToSerial(){
 }
 
 function drawStartScreen() {
-  background(100, 150, 250);
+  background(255, 165, 0);
   
   fill(255);
   textSize(40);
@@ -113,19 +128,8 @@ function drawStartScreen() {
 }
 function playGame() {
   updateTimer();
-  let movement = map(x,0,100, -cup.speed, cup.speed);
-  cupAnimate.draw(movement);
-  cupAnimate.x = constrain(cupAnimate.x, 40, 400);
-
-  let timeRatio = timeLeft / gameTime;
-  let currentSpawnRate = max(Math.floor(spawnRate * timeRatio), 15);
-  let currentBallSpeed = ballSpeed + (1 - timeRatio) * 5;
-  if (frameCount % currentSpawnRate === 0 && balls.length < maxBalls) {
-    spawnBall(currentSpawnRate, currentBallSpeed);
-  }
-
-  updateBalls()
-
+  drawGameInfo();
+  
   if (score >= winScore) {
     gameStatus = 'W';
     gameOver = true;
@@ -151,7 +155,7 @@ function startGame() {
   score = 0;
   ballSpeed = 3;
   
-  cupAnimate.visible = true;
+  balls.visible = true;
   
   startTime = millis();
   timeLeft = gameTime;
@@ -159,67 +163,11 @@ function startGame() {
   sendGameStatus('P');
 }
 
-function spawnBall(currentSpawnRate, currentSpeed) {
-  let ballSprite = ball;
-  
-  let ballSize = random(15, 25);
-  
-  ballSprite.x = random(20, width - 20);
-  ballSprite.y = 0;
-  ballSprite.width = ballSize;
-  ballSprite.height = ballSize;
-  
-  ballSprite.draw = function() {
-    push();
-    translate(this.x, this.y);    
-    pop();
-  };
-  
-  ballSprites.push(ballSprite);
-  balls.push({
-    sprite: ballSprite,
-    speed: ballSprite.speed,
-    diameter: ballSize
-  });
-}
-
-function updateBalls() {
-  for (let i = balls.length - 1; i >= 0; i--) {
-    balls[i].sprite.y += balls[i].speed;
-    
-    if (isBallCaught(balls[i])) {
-      score++;
-      balls[i].sprite.remove();
-      balls.splice(i, 1);
-      continue;
-    }
-    
-    if (balls[i].sprite.y > height + balls[i].diameter) {
-      balls[i].sprite.remove();
-      balls.splice(i, 1);
-    }
-  }
-}
-
-function isBallCaught(ball) {
-  let ballX = ball.sprite.x;
-  let ballY = ball.sprite.y;
-  let ballRadius = ball.diameter / 2;
-  
-  let cupX = cupAnimate.x;
-  let cupY = cupAnimate.y;
-  let cupWidth = 70;
-  let cupTop = cupY - 40;
-  
-  let isBallWithinCupX = ballX >= (cupX - cupWidth/2) && ballX <= (cupX + cupWidth/2);
-  let isBallTouchingCupTop = ballY + ballRadius >= cupTop && ballY + ballRadius <= cupTop + 15;
-  
-  return isBallWithinCupX && isBallTouchingCupTop;
-}
-
 function updateTimer() {
   timeLeft = gameTime - (millis() - startTime) / 1000;
   timeLeft = max(timeLeft, 0);
+  let timeRatio = timeLeft/gameTime;
+  ballSpeed += timeRatio;
 }
 
 function drawGameInfo() {
@@ -227,9 +175,7 @@ function drawGameInfo() {
   textSize(16);
   textAlign(LEFT);
   text("Score: " + score, 20, 30);
-  text("Lives: " + lives, 20, 55);
   text("Time: " + timeLeft.toFixed(1) + "s", 20, 80);
-  text("Joystick Value: " + serialData, 20, 105);
   
   textAlign(RIGHT);
   text("Target: " + winScore, width - 20, 30);
@@ -279,9 +225,9 @@ function sendGameStatus(status) {
 
 
 class Character{
-  constructor(x,y){
-    this.x = x;
-    this.y = y;
+  constructor(xVal,yVal){
+    this.x = xVal;
+    this.y = yVal;
     this.currentAnimation = null;
     this.animations = {};
   }
@@ -290,15 +236,15 @@ class Character{
     this.animations[key] = animation;
   }
 
-  draw(movement){
+  draw(){
     let animation = this.animations[this.currentAnimation];
     if (animation){
       switch(this.currentAnimation){
         case "right":
-          this.x += movement;
+          this.x += 2;
           break
         case "left":
-          this.x -= movement;
+          this.x -= 2;
           break
       }
       push();
@@ -306,6 +252,32 @@ class Character{
       animation.draw();
       pop();
     }
+  }
+}
+
+class Ball{
+  constructor(xVal,yVal, speed, move){
+    this.x = xVal;
+    this.y = yVal;
+    this.speed = speed;
+    this.move = move;
+  }
+  draw(){
+    push();
+    translate(this.x,this.y)
+
+    this.y += this.speed * this.move;
+    if (this.y > 550){
+      this.y = 15;
+    }
+    pop();
+  }
+
+  caught(){
+    this.move() = 0;
+    score ++;
+    this.speed = 0;
+    this.visible = 0;
   }
 }
 
@@ -334,6 +306,25 @@ class SpriteAnimation {
   }
 }
 
+function caughtSound(){
+  synth = new Tone.Synth({
+    oscillator: { type: "triangle" },
+    envelope: { attack: 0.01, decay: .2, sustain: 0, release: .01 }
+  }).toDestination();
+
+  noise = new Tone.Noise("white").start();
+  noise.volume.value = -100;
+
+  filter = new Tone.Filter(1200, "highpass").toDestination();
+  noise.connect(filter);
+
+  lfo = new Tone.LFO(8, 800, 1200);
+  lfo.connect(filter.frequency);
+  lfo.start();
+
+  synth.triggerAttackRelease("C6", "8n");
+}
+
 async function startMusic() {
   await Tone.start();
   console.log("Audio started");
@@ -343,7 +334,10 @@ async function startMusic() {
     envelope: { attack: 0.1, decay: 0.2, sustain: 0.4, release: 1 }
   }).toDestination();
 
+  synth.volume.value = -20;
+
   kick = new Tone.MembraneSynth().toDestination();
+  kick.volume.value=-20;
 
   const melody = ['C4', 'E4', 'G4', 'C5', 'B4', 'A4', 'G4', 'E4'];
 
